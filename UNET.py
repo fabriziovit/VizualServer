@@ -1,16 +1,17 @@
+import keras.initializers.initializers_v1
 import tensorflow as tf
 import numpy as np
 import pickle as pkl
 from skimage.io import imread
 from os import listdir
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Activation, Conv2DTranspose, \
+from keras.models import Model, load_model
+from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Activation, Conv2DTranspose, \
     Dropout
-from tensorflow.keras.initializers import he_normal
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.keras import backend
+#from keras import initializers
+#from keras import optimizer_v2
+from keras.regularizers import l2
+from keras.callbacks import ModelCheckpoint
+from keras import backend
 
 
 
@@ -105,10 +106,10 @@ def augment(image, mask):
 
 
 def build_unet(input_shape=(256, 256, 3), num_classes=3):
-    conv2dparam = dict(padding='same', kernel_initializer=he_normal(), kernel_regularizer=l2(1e-04),
+    conv2dparam = dict(padding='same', kernel_initializer=keras.initializers.initializers_v1.HeNormal(), kernel_regularizer=l2(1e-04),
                        bias_regularizer=l2(1e-04),
                        activity_regularizer=l2(1e-04))
-    conv2dtparam = dict(kernel_size=(2, 2), strides=(2, 2), kernel_initializer=he_normal(),
+    conv2dtparam = dict(kernel_size=(2, 2), strides=(2, 2), kernel_initializer=keras.initializers.initializers_v1.HeNormal(),
                         kernel_regularizer=l2(1e-04),
                         bias_regularizer=l2(1e-04),
                         activity_regularizer=l2(1e-04))
@@ -191,7 +192,7 @@ def build_unet(input_shape=(256, 256, 3), num_classes=3):
     
     #classify = Conv2D(num_classes, (1, 1), **conv2dparam)(up1)
 
-    classify = Conv2D(num_classes, (1, 1), padding='valid', kernel_initializer=he_normal(), kernel_regularizer=l2(1e-04),
+    classify = Conv2D(num_classes, (1, 1), padding='valid', kernel_initializer=keras.initializers.initializers_v1.HeNormal(), kernel_regularizer=l2(1e-04),
                        bias_regularizer=l2(1e-04),
                        activity_regularizer=l2(1e-04))(up1)
 
@@ -199,7 +200,7 @@ def build_unet(input_shape=(256, 256, 3), num_classes=3):
 
     model = Model(inputs=inputs, outputs=classify, name='UNET_HOPE')
 
-    model.compile(optimizer=Adam(learning_rate=1e-04, epsilon=1e-08), metrics=['accuracy','MeanSquaredError', tf.keras.metrics.RootMeanSquaredError(name='Rmse')], loss=MyLoss) #loss=tf.keras.losses.MSE) 
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-04, epsilon=1e-08), metrics=['accuracy', 'MeanSquaredError', tf.keras.metrics.RootMeanSquaredError(name='Rmse')], loss=MyLoss) #loss=tf.keras.losses.MSE)
 
     model.save('/home/ascalella/dataset/Network/unet.h5')
 

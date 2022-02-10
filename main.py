@@ -28,11 +28,12 @@ def get_image():
     if image_name is not None and image_path is not None:
         try:
             real_path = os.path.dirname(os.path.realpath(__file__))
-            image_abs_path = os.path.join(real_path + "\\images", image_path)
+            image_abs_path = os.path.join(real_path + "/images", image_path)
+            print(real_path, image_abs_path)
             if os.path.splitext(image_path)[1] == '.tif':
                 img = Image.open(image_abs_path)
                 img_io = BytesIO()
-                img.save(img_io, 'JPEG', quality=1)
+                img.save(img_io, 'JPEG', quality=70)
                 img_io.seek(0)
                 return send_file(img_io, mimetype='image/jpeg')
             else:
