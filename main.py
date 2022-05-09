@@ -4,11 +4,15 @@ from flask import request
 from flask_limiter.util import get_remote_address
 from middlewares.authorization import AuthorizationMiddleware
 from ListImages import images
+import numpy as np
+from io import BytesIO
 import os
 os.add_dll_directory('C:/Users/Fabrizio/AppData/Local/Programs/Python/Python39/Lib/openslide-win64-20171122/bin')
 from PIL import Image
 import logging
+from threading import Thread
 from openslide import OpenSlide
+import time
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +42,45 @@ def _get_concat_v(img_lst):
         v += img.height
     return dst
 
+class IlMioThread (Thread):
+   def __init__(self, image_path, durata):
+       Thread.__init__(self)
+       self.durata = durata
+       save_svs_img(image_path)
+   def run(self):
+       print("Thread avviato")
+       time.sleep(self.durata)
+       print("Thread terminato")
+
+def save_svs_img(slide_filename, tile_size=8192):
+    slide_file = OpenSlide(slide_filename)
+    slide_width, slide_height = slide_file.dimensions
+    # tile_arr = []
+    slide_img = np.zeros((slide_height, slide_width, 3), np.uint8)
+    x_tile_num = int(np.floor((slide_width-1)/tile_size)) + 1
+    y_tile_num = int(np.floor((slide_height-1)/tile_size)) + 1
+    for iy in range(y_tile_num):
+        for ix in range(x_tile_num):
+            start_x = ix * tile_size
+            len_x = tile_size if (ix + 1) * tile_size < slide_width else (slide_width - start_x)
+            start_y = iy * tile_size
+            len_y = tile_size if (iy + 1) * tile_size < slide_height else (slide_height - start_y)
+            # tile_arr.append(((start_x, start_y), (len_x, len_y)))
+            cur_tile = slide_file.read_region(location=(start_x, start_y), level=0, size=(len_x, len_y))
+            slide_img[start_y:start_y+len_y, start_x:start_x+len_x, :] = np.array(cur_tile)[:,:,:3]
+    slide_savename = os.path.splitext(slide_filename)[0] + '.tif'
+    #da vedere se funnziona così
+    img = Image.open(slide_savename)
+    img_io = BytesIO()
+    print("1111111")
+    img.save(img_io, 'JPEG', quality=1)
+    img.save(img_io, 'JPEG', quality=70)
+    img_io.seek(0)
+    print("AAAAAAAAAA")
+    return send_file(img_io, mimetype='image/jpeg')
+    #io.imsave(slide_savename, slide_img
+
+
 @app.route('/api/get-image', methods=['POST'])
 def get_image():
     image_name = request.form.get("name")
@@ -46,45 +89,11 @@ def get_image():
             real_path = os.path.dirname(os.path.realpath(__file__))
             image_abs_path = os.path.join(real_path + "/images", image_path)
             print(real_path, image_abs_path)
-            if os.path.splitext(image_path)[1] == '.svs':
-                UNIT_X, UNIT_Y = 15000, 15000
-                try:
-                    save_name = image_name.split(".")[0] + ".jpg"
-                    print("Processing : %s" % image_name)
-                    os_obj = OpenSlide(image_abs_path)
-                    w, h = os_obj.dimensions
-                    w_rep, h_rep = int(w / UNIT_X) + 1, int(h / UNIT_Y) + 1
-                    w_end, h_end = w % UNIT_X, h % UNIT_Y
-                    w_size, h_size = UNIT_X, UNIT_Y
-                    w_start, h_start = 0, 0
-                    v_lst = []
-                    print(w, h)
-                    print("AAAAA")
-                    for i in range(h_rep):
-                        if i == h_rep - 1:
-                            h_size = h_end
-                        h_lst = []
-                        for j in range(w_rep):
-                            if j == w_rep - 1:
-                                w_size = w_end
-                            img = os_obj.read_region((w_start, h_start), 0, (w_size, h_size))
-                            img = img.convert("RGB")
-                            h_lst.append(img)
-                            w_start += UNIT_X
-                        v_lst.append(h_lst)
-                        w_size = UNIT_X
-                        h_start += UNIT_Y
-                        w_start = 0
-                    concat_h = [_get_concat_h(v) for v in v_lst]
-                    print("BBBBB")
-                    #stampa BBBB poi da errore prima c'era save_name da provare con image_name
-                    concat_hv = _get_concat_v(concat_h)
-                    concat_hv.save(image_path + "\\" + image_name)
-                    print("CCCCC")
-                    return send_file(image_path + "\\" + image_name, mimetype='image/jpg')
-                except:
-                    logger.error("Error compressing image")
-                    return Response(status=500)
+            #if os.path.splitext(image_path)[1] == '.svs':
+            thread1 = IlMioThread(image_abs_path, 240)
+
+            thread1.start()
+            thread1.join()
     return Response(status=400)
 
 
