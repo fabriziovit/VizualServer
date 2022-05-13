@@ -51,13 +51,10 @@ class Converter:
         for index, thread in enumerate(threads):
             thread.join()
 
-        print("Conversion over... Saving as JPEG")
-        im = Image.fromarray(slide_img)
-        img_io = BytesIO()
-        im.save(img_io, 'JPEG', quality=65)
-        img_io.seek(0)
-        print("Converted.")
-        return send_file(img_io, mimetype='image/jpeg')
+        print("Converting...")
+
+        return Image.fromarray(slide_img)
+
 
 
 @app.route('/api/get-image', methods=['POST'])
@@ -65,11 +62,20 @@ def get_image():
     image_name = request.form.get("name")
     image_path = images.get(image_name)
     if image_name is not None and image_path is not None:
-        real_path = os.path.dirname(os.path.realpath(__file__))
-        image_abs_path = os.path.join(real_path + "/images", image_path)
-        print(real_path, image_abs_path)
-        converter = Converter()
-        converter.save_svs_img(image_abs_path)
+        try:
+            real_path = os.path.dirname(os.path.realpath(__file__))
+            image_abs_path = os.path.join(real_path + "/images", image_path)
+            print(real_path, image_abs_path)
+            converter = Converter()
+            image = converter.save_svs_img(image_abs_path)
+            img_io = BytesIO()
+            image.save(img_io, 'JPEG', quality=65)
+            #img_io.seek(0)
+            print("Converted.")
+            return send_file(img_io, mimetype='image/jpeg')
+        except:
+            logger.error("Error compressing image")
+            return Response(status=500)
         # if os.path.splitext(image_path)[1] == '.svs':
     return Response(status=400)
 
