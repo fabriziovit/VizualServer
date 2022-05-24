@@ -1,7 +1,7 @@
 images = {
-    "Terra": "PIA18033.tif",
-    "Encelado": "PIA07800.tif",
-    "Venere": "PIA00478.tif",
-    "Gioconda": "GIOCONDA.jpg",
-    "Test": "test1.svs"
+    "Terra": "PIA18033",
+    "Encelado": "PIA07800",
+    "Venere": "test",
+    "Gioconda": "GIOCONDA",
+    "Test": "test1"
 }

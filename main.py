@@ -8,6 +8,7 @@ import numpy as np
 from io import BytesIO
 import os
 os.add_dll_directory('C:/Users/Fabrizio/AppData/Local/Programs/Python/Python39/Lib/openslide-win64-20171122/bin')
+import signal
 from PIL import Image
 import logging
 from threading import Thread
@@ -15,14 +16,13 @@ from openslide import OpenSlide
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
-limiter = Limiter(app, key_func=get_remote_address, default_limits=["20/minute"])
+#limiter = Limiter(app, key_func=get_remote_address, default_limits=["20/minute"])
 app.wsgi_app = AuthorizationMiddleware(app.wsgi_app)
 
 
 @app.route('/api/get-images', methods=['GET'])
 def get_images_names():
     return jsonify(data=[*images])
-
 
 class Converter:
     @staticmethod
@@ -37,6 +37,7 @@ class Converter:
 
     def save_svs_img(self, slide_filename, tile_size=8192):
         slide_file = OpenSlide(slide_filename)
+        #slide_file.read_region() usare il read region per l'openSlide image oppure il crop dall'immagine se è gia un image oppure usare il metodo getPatch
         slide_width, slide_height = slide_file.dimensions
         slide_img = np.zeros((slide_height, slide_width, 3), np.uint8)
         x_tile_num = int(np.floor((slide_width - 1) / tile_size)) + 1
@@ -55,33 +56,53 @@ class Converter:
 
         return Image.fromarray(slide_img)
 
-
-
+#image.crop((1, 1, 98, 33)) Usare crop per avere la parte
+#trovare altre immagini svs per provare
 @app.route('/api/get-image', methods=['POST'])
 def get_image():
+    max_width, max_height = 2560, 1504 #dimensione del tablet
     image_name = request.form.get("name")
     image_path = images.get(image_name)
-    if image_name is not None and image_path is not None:
-        try:
-            real_path = os.path.dirname(os.path.realpath(__file__))
-            image_abs_path = os.path.join(real_path + "/images", image_path)
-            print(real_path, image_abs_path)
+    #if image_name is not None and image_path is not None:
+    try:
+        real_path = os.path.dirname(os.path.realpath(__file__))
+        image_abs_path = os.path.join(real_path + "/images", image_path)
+        print(real_path, image_abs_path)
+        if os.path.exists(image_abs_path + ".jpeg") or os.path.exists(image_abs_path + ".jpg"):
+            return send_file(image_abs_path, mimetype='image/jpg')
+        #real_path = os.path.dirname(os.path.realpath(__file__))
+        #image_abs_path = os.path.join(real_path + "/images", image_path)
+        else:
             converter = Converter()
-            image = converter.save_svs_img(image_abs_path)
-            img_io = BytesIO()
-            image.save(img_io, 'JPEG', quality=65)
+            image = converter.save_svs_img(image_abs_path+".svs")
+            ratio = min(max_width/image.size[0], max_height/image.size[1])
+            w = int(image.size[0] * ratio)
+            h = int(image.size[1] * ratio)
+            image = image.resize((w, h), Image.ANTIALIAS)
+            img_io = image_abs_path+".jpeg"
+            image.save(img_io, 'JPEG')
             #img_io.seek(0)
             print("Converted.")
-            return send_file(img_io, mimetype='image/jpeg')
-        except:
-            logger.error("Error compressing image")
-            return Response(status=500)
-        # if os.path.splitext(image_path)[1] == '.svs':
-    return Response(status=400)
+            return send_file(img_io, mimetype='image/jpg')
+    except:
+        logger.error("Error compressing image")
+        return Response(status=500)
+    #return Response(status=400)
+
+
+def exit_handler(code, frame):
+    # cancellazione files che finiscono con .jpeg
+    real_path = os.path.dirname(os.path.realpath(__file__))
+    for fil in os.listdir(real_path+"/images"):
+        if fil.endswith('.jpeg') or fil.endswith('.jpg'):
+            os.remove(real_path+"/images/"+fil)
+    print("exit", code)
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, exit_handler)
     app.run(host='127.0.0.1', port=8000, debug=True)
+
     '''
     real_path = os.path.dirname(os.path.realpath(__file__))
     image_abs_path = os.path.join(real_path + "/images/test1.svs")
@@ -89,3 +110,10 @@ if __name__ == '__main__':
     converter = Converter()
     converter.save_svs_img(image_abs_path, image_out_path)
     '''
+
+
+'''
+    def _GetPatch(self, TIFFImg, start_h, start_w, windowShape, fetchingLevel):
+        tile = numpy.array(TIFFImg.read_region((start_h, start_w), fetchingLevel, windowShape))
+        return tile;
+'''
