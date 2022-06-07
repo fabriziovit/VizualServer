@@ -1,7 +1,5 @@
 images = {
-    "Terra": "PIA18033",
-    "Encelado": "PIA07800",
-    "Venere": "test",
-    "Gioconda": "GIOCONDA",
+    "Tessuto Cuore": "cuore_tessuto",
+    "Immagine 1": "brightfield",
     "Test": "test1"
 }

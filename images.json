@@ -1,0 +1,16 @@
+{
+   "images":{
+      "Tessuto Cuore":{
+         "name":"cuore_tessuto",
+         "ratio":0.12500382602
+      },
+      "Immagine 1":{
+         "name":"brightfield",
+         "ratio":0.0625
+      },
+      "Test":{
+         "name":"test1",
+         "ratio":0.12501949368
+      }
+   }
+}
