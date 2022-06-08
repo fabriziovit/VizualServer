@@ -33,9 +33,7 @@ class Converter:
             if i[0] <= 6000 and i[1] <= 6000:
                 print(cont)
                 break
-        print("qui")
         image = dz.get_tile(cont, (0, 0))# image size: (8000, 8193) invece (8001, 9619)
-        print("quo")
         return image
 
 #trovare altre immagini svs per provare
@@ -80,18 +78,22 @@ def get_ratio(file_name):
     return ratio
 
 #get the 4 coords of the image and the name of the image and the ratio between the resized and the original image
-@app.route('/api/get-image-cropped/<name>/<int:left>_<int:top>_<int:width>_<int:height>/<int:ratio>')
-def get_image_cropped(name, left, top, width, height, ratio):
+@app.route('/api/get-image-cropped/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
+def get_image_cropped(name, left, top, width, height):
+    name = images.get(name)
     #name = da json get name
+    ratio = 0.12501949368#ratio di immagine Test
     real_path = os.path.dirname(os.path.realpath(__file__))
     image_abs_path = os.path.join(real_path + "/images", name)
+    print(image_abs_path+"-cropped.jpeg")
     openslide = OpenSlide(image_abs_path+".svs")
-    left = left/ratio
-    top = top/ratio
-    width = width/ratio
-    height = height/ratio
-    image = openslide.read_region((left, top), 0, (width, height))#da provare
-    img_io = image + "-cropped.jpeg"
+    left = int(left/ratio)
+    top = int(top/ratio)
+    width = int(width/ratio)
+    height = int(height/ratio)
+    image = openslide.read_region((left, top), 0, (width, height))
+    image = image.convert('RGB')
+    img_io = image_abs_path+"_cropped.jpeg"
     image.save(img_io, 'JPEG')
     return send_file(img_io, mimetype='image/jpg')
 
