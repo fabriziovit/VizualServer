@@ -1,3 +1,5 @@
+import math
+
 from flask import Flask, jsonify, Response, send_file
 from flask_limiter import Limiter
 from flask import request
@@ -6,6 +8,7 @@ from middlewares.authorization import AuthorizationMiddleware
 from ListImages import images
 import numpy as np
 import os
+
 os.add_dll_directory('C:/Users/Fabrizio/AppData/Local/Programs/Python/Python39/Lib/openslide-win64-20171122/bin')
 import signal
 from PIL import Image
@@ -15,7 +18,7 @@ from openslide.deepzoom import DeepZoomGenerator
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
-#limiter = Limiter(app, key_func=get_remote_address, default_limits=["20/minute"])
+# limiter = Limiter(app, key_func=get_remote_address, default_limits=["20/minute"])
 app.wsgi_app = AuthorizationMiddleware(app.wsgi_app)
 
 @app.route('/api/get-images', methods=['GET'])
@@ -33,26 +36,28 @@ class Converter:
             if i[0] <= 6000 and i[1] <= 6000:
                 print(cont)
                 break
-        image = dz.get_tile(cont, (0, 0))# image size: (8000, 8193) invece (8001, 9619)
+        image = dz.get_tile(cont, (0, 0))  # image size: (8000, 8193) invece (8001, 9619)
         return image
 
-#trovare altre immagini svs per provare
+
+# trovare altre immagini svs per provare
 @app.route('/api/get-image', methods=['POST'])
 def get_image():
     image_name = request.form.get("name")
-    image_path = images.get(image_name)
+    values = images.get(image_name)
+    [image_path, _] = values
     try:
         real_path = os.path.dirname(os.path.realpath(__file__))
         image_abs_path = os.path.join(real_path + "/images", image_path)
         print(image_abs_path)
         if os.path.exists(image_abs_path + ".jpeg"):
-            return send_file(image_abs_path+ ".jpeg", mimetype='image/jpeg')
+            return send_file(image_abs_path + ".jpeg", mimetype='image/jpeg')
         elif os.path.exists(image_abs_path + ".jpg"):
             return send_file(image_abs_path + ".jpg", mimetype='image/jpg')
         else:
             converter = Converter()
-            image = converter.get_zoom(image_abs_path+".svs")
-            img_io = image_abs_path+".jpeg"
+            image = converter.get_zoom(image_abs_path + ".svs")
+            img_io = image_abs_path + ".jpeg"
             image.save(img_io, 'JPEG')
             print("Converted.")
             return send_file(img_io, mimetype='image/jpg')
@@ -60,12 +65,12 @@ def get_image():
         logger.error("Error compressing image")
         return Response(status=500)
 
-#funzione che restituisce il ratio dell'immagine
-#da usare se il ratio di un immagine nel json è uguale a 0
+# funzione che restituisce il ratio dell'immagine
+# da usare se il ratio di un immagine nel json è uguale a 0
 def get_ratio(file_name):
     original_size = 0
     selected_size = 0
-    slide_file = OpenSlide(file_name+".svs")
+    slide_file = OpenSlide(file_name + ".svs")
     dz = DeepZoomGenerator(slide_file, 8192, 1, False)
     cont = dz.level_count
     for i in reversed(dz.level_dimensions):
@@ -74,36 +79,53 @@ def get_ratio(file_name):
         if i[0] <= 6000 and i[1] <= 6000:
             selected_size = i
             break
-    ratio = min(selected_size[0]/original_size[0], selected_size[1]/original_size[1])
+    ratio = min(selected_size[0] / original_size[0], selected_size[1] / original_size[1])
     return ratio
 
-#get the 4 coords of the image and the name of the image and the ratio between the resized and the original image
+# get the 4 coords of the image and the name of the image and the ratio between the resized and the original image
 @app.route('/api/get-image-cropped/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
 def get_image_cropped(name, left, top, width, height):
-    name = images.get(name)
-    #name = da json get name
-    ratio = 0.12501949368#ratio di immagine Test
+    maxValue = 4000
+    values = images.get(name)
+    [name, ratio] = values
     real_path = os.path.dirname(os.path.realpath(__file__))
     image_abs_path = os.path.join(real_path + "/images", name)
-    print(image_abs_path+"-cropped.jpeg")
-    openslide = OpenSlide(image_abs_path+".svs")
-    left = int(left/ratio)
-    top = int(top/ratio)
-    width = int(width/ratio)
-    height = int(height/ratio)
+    print(image_abs_path + "-cropped.jpeg")
+    openslide = OpenSlide(image_abs_path + ".svs")
+    levels = openslide.level_dimensions[0]
+    imageW = levels[0]
+    imageH = levels[1]
+    left = int(left / ratio)
+    if not (0 <= left <= imageW):
+        left = imageW
+    top = int(top / ratio)
+    if not (0 <= top <= imageH):
+        top = imageW
+    width = int(width / ratio)
+    if not ((left + width) < imageW):
+        logger.error("Error cropping images, data not valid")
+        return Response(status=500)
+    height = int(height / ratio)
+    if not ((top + height) < imageH):
+        logger.error("Error cropping images, data not valid")
+        return Response(status=500)
     image = openslide.read_region((left, top), 0, (width, height))
     image = image.convert('RGB')
-    img_io = image_abs_path+"_cropped.jpeg"
+    img_io = image_abs_path + "_cropped.jpeg"
+    ratioCrop = min(maxValue / image.width, maxValue / image.height)
+    if ratioCrop < 1:
+        image = image.resize((math.floor(image.width * ratioCrop), math.floor(image.height * ratioCrop)), Image.ANTIALIAS)
     image.save(img_io, 'JPEG')
     return send_file(img_io, mimetype='image/jpg')
 
 def exit_handler(code, frame):
     # cancellazione files che finiscono con .jpeg
     real_path = os.path.dirname(os.path.realpath(__file__))
-    for fil in os.listdir(real_path+"/images"):
+    for fil in os.listdir(real_path + "/images"):
         if fil.endswith('.jpeg') or fil.endswith('.jpg'):
-            os.remove(real_path+"/images/"+fil)
+            os.remove(real_path + "/images/" + fil)
     print("SPEGNIMENTO SERVER... CANCELLAZIONE FILES CONVERTITI.")
+
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
