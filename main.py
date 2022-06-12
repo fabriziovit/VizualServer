@@ -60,7 +60,7 @@ def get_image():
             img_io = image_abs_path + ".jpeg"
             image.save(img_io, 'JPEG')
             print("Converted.")
-            return send_file(img_io, mimetype='image/jpg')
+            return send_file(img_io, mimetype='image/jpeg')
     except:
         logger.error("Error compressing image")
         return Response(status=500)
@@ -82,7 +82,7 @@ def get_ratio(file_name):
     ratio = min(selected_size[0] / original_size[0], selected_size[1] / original_size[1])
     return ratio
 
-# get the 4 coords of the image and the name of the image and the ratio between the resized and the original image
+# get the 2 coords and the width and the height of the image cropped also the name of the image, the function calculate the ratio of the area cropped and return the image
 @app.route('/api/get-image-cropped/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
 def get_image_cropped(name, left, top, width, height):
     maxValue = 4000
@@ -114,9 +114,10 @@ def get_image_cropped(name, left, top, width, height):
     img_io = image_abs_path + "_cropped.jpeg"
     ratioCrop = min(maxValue / image.width, maxValue / image.height)
     if ratioCrop < 1:
-        image = image.resize((math.floor(image.width * ratioCrop), math.floor(image.height * ratioCrop)), Image.ANTIALIAS)
+        image = image.resize((math.floor(image.width * ratioCrop), math.floor(image.height * ratioCrop)),
+                             Image.ANTIALIAS)
     image.save(img_io, 'JPEG')
-    return send_file(img_io, mimetype='image/jpg')
+    return send_file(img_io, mimetype='image/jpeg')
 
 def exit_handler(code, frame):
     # cancellazione files che finiscono con .jpeg
