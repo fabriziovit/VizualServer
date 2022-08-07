@@ -9,7 +9,7 @@ from ListImages import images
 import numpy as np
 import os
 
-os.add_dll_directory('C:/Users/Fabrizio/AppData/Local/Programs/Python/Python39/Lib/openslide-win64-20171122/bin')
+#os.add_dll_directory('C:/Users/Fabrizio/AppData/Local/Programs/Python/Python39/Lib/openslide-win64-20171122/bin')
 import signal
 from PIL import Image
 import logging
@@ -30,6 +30,7 @@ class Converter:
         slide_file = OpenSlide(slide_filename)
         dz = DeepZoomGenerator(slide_file, tile_size, 1, False)
         cont = dz.level_count
+        print("Converting image...")
         for i in reversed(dz.level_dimensions):
             cont = cont - 1
             print(i[0], i[1])
@@ -67,25 +68,39 @@ def get_image():
 
 # funzione che restituisce il ratio dell'immagine
 # da usare se il ratio di un immagine nel json è uguale a 0
-def get_ratio(file_name):
-    original_size = 0
+def get_ratio(file_name, level):
     selected_size = 0
     slide_file = OpenSlide(file_name + ".svs")
-    dz = DeepZoomGenerator(slide_file, 8192, 1, False)
-    cont = dz.level_count
+    dz = DeepZoomGenerator(slide_file, 8192, pow(2, 14), False)
+    original_size = dz.level_dimensions[len(dz.level_dimensions)-1]
+    cont = len(dz.level_dimensions)-1
+    level = len(dz.level_dimensions) - (level-1)
+    print(level, "    ", cont)
+    tiles = dz.tile_count
+    print(tiles)
     for i in reversed(dz.level_dimensions):
-        original_size = i
-        cont = cont - 1
-        if i[0] <= 6000 and i[1] <= 6000:
+        if cont == level:
             selected_size = i
             break
+        cont -= 1
     ratio = min(selected_size[0] / original_size[0], selected_size[1] / original_size[1])
     return ratio
+
+def get_level(file_name):
+    slide_file = OpenSlide(file_name + ".svs")
+    dz = DeepZoomGenerator(slide_file, 8192, 1, False)
+    cont = 0
+    for i in reversed(dz.level_dimensions):
+        cont += 1
+        if i[0] <= 6000 and i[1] <= 6000:
+            break
+    return cont
+
 
 # get the 2 coords and the width and the height of the image cropped also the name of the image, the function calculate the ratio of the area cropped and return the image
 @app.route('/api/get-image-cropped/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
 def get_image_cropped(name, left, top, width, height):
-    maxValue = 4000
+    maxValue = 5000
     values = images.get(name)
     [name, ratio] = values
     real_path = os.path.dirname(os.path.realpath(__file__))
@@ -118,6 +133,59 @@ def get_image_cropped(name, left, top, width, height):
                              Image.ANTIALIAS)
     image.save(img_io, 'JPEG')
     return send_file(img_io, mimetype='image/jpeg')
+
+
+@app.route('/api/get-image-grayscale/<name>')
+def get_image_grayscale(name):
+    values = images.get(name)
+    [name, ratio] = values
+    real_path = os.path.dirname(os.path.realpath(__file__))
+    image_abs_path = os.path.join(real_path + "/images", name)
+    if os.path.exists(image_abs_path + "_grayscaled.jpeg"):
+        return send_file(image_abs_path + "_grayscaled.jpeg", mimetype='image/jpeg')
+    converter = Converter()
+    image = converter.get_zoom(image_abs_path + ".svs")
+    image = image.convert('L')
+    img_io = image_abs_path + "_grayscaled.jpeg"
+    image.save(img_io)
+    return send_file(img_io, mimetype='image/jpeg')
+
+
+@app.route('/api/get-image-cropped-grayscale/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
+def get_image_cropped_grayscale(name, left, top, width, height):
+    max_value = 8000
+    values = images.get(name)
+    [name, ratio] = values
+    real_path = os.path.dirname(os.path.realpath(__file__))
+    image_abs_path = os.path.join(real_path + "/images", name)
+    openslide = OpenSlide(image_abs_path + ".svs")
+    levels = openslide.level_dimensions[0]
+    imageW = levels[0]
+    imageH = levels[1]
+    left = int(left / ratio)
+    if not (0 <= left <= imageW):
+        left = imageW
+    top = int(top / ratio)
+    if not (0 <= top <= imageH):
+        top = imageW
+    width = int(width / ratio)
+    if not ((left + width) < imageW):
+        logger.error("Error cropping images, data not valid")
+        return Response(status=500)
+    height = int(height / ratio)
+    if not ((top + height) < imageH):
+        logger.error("Error cropping images, data not valid")
+        return Response(status=500)
+    image = openslide.read_region((left, top), 0, (width, height))
+    image = image.convert('RGB').convert('L')
+    img_io = image_abs_path + "_cropped_grayscaled.jpeg"
+    ratio_crop = min(max_value / image.width, max_value / image.height)
+    if ratio_crop < 1:
+        image = image.resize((math.floor(image.width * ratio_crop), math.floor(image.height * ratio_crop)),
+                             Image.ANTIALIAS)
+    image.save(img_io)
+    return send_file(img_io, mimetype='image/jpeg')
+
 
 def exit_handler(code, frame):
     # cancellazione files che finiscono con .jpeg
