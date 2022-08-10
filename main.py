@@ -29,29 +29,25 @@ def get_images_names():
 class Converter:
     def get_zoom(self, slide_filename, tile_size=2048):
         slide_file = OpenSlide(slide_filename)
+        resize_value = 256
+        resize_tile_div_value = tile_size/resize_value
         col_ini = 0
         row_ini = 0
         dz = DeepZoomGenerator(slide_file, tile_size, 1, False)
-        print(dz.get_tile_coordinates(16, (0, 1)))
-        print(slide_file.dimensions)
         col_fin = math.ceil(slide_file.dimensions[0]/tile_size)
         row_fin = math.ceil(slide_file.dimensions[1]/tile_size)
 
-        new_im = Image.new('RGB', (int((slide_file.dimensions[0]/tile_size) * 128), int((slide_file.dimensions[1]/tile_size) * 128)))#(size[0]/tile_size) * 256 and (size[1]/tile_size) * 256
-        #resta da capire l'aspect ratio per poi riprendere l'immagine croppata
-        #salvare il ratio di width e height direttamente in listImages...
-
+        new_im = Image.new('RGB', (int((slide_file.dimensions[0]/tile_size) * resize_value), int((slide_file.dimensions[1]/tile_size) * resize_value)))
         y_offset = 0
         x_offset = 0
         for i in range(col_ini, col_fin):
             for j in range(row_ini, row_fin):
-                tile = dz.get_tile(16, (i, j))
-                tile = tile.resize((128, 128))
+                tile = dz.get_tile(dz.level_count-1, (i, j))
+                tile = tile.resize((int(tile.size[0]/resize_tile_div_value), int(tile.size[1]/resize_tile_div_value)), Image.ANTIALIAS)
                 new_im.paste(tile, (x_offset, y_offset))
-                y_offset += 128
+                y_offset += resize_value
             y_offset = 0
-            x_offset += 128
-
+            x_offset += resize_value
         return new_im
 
 
@@ -137,6 +133,7 @@ def get_image_cropped(name, left, top, width, height):
 def get_image_cropped_test(name, width, height, left, top):
     max_value = 8000
     tile_size = 2048
+    resize_value = 256
     values = images.get(name)
     [name, ratio] = values
     real_path = os.path.dirname(os.path.realpath(__file__))
@@ -147,14 +144,12 @@ def get_image_cropped_test(name, width, height, left, top):
     image_height = levels[1]
     print(image_height, image_width)
 
-    new_width = int((image_width/tile_size) * 128)
+    new_width = int((image_width/tile_size) * resize_value)
     ratio = new_width/image_width
-    print(ratio)
     left = int(left/ratio)
     top = int(top/ratio)
     height = int(height/ratio)
     width = int(width/ratio)
-    print(left, top, width, height)
     image = openslide.read_region((left, top), 0, (width, height))
     image = image.convert('RGB')
     img_io = image_abs_path + "_cropped.jpeg"
@@ -185,6 +180,7 @@ def get_image_grayscale(name):
 def get_image_cropped_grayscale(name, left, top, width, height):
     max_value = 8000
     tile_size = 2048
+    resize_value = 256
     values = images.get(name)
     [name, ratio] = values
     real_path = os.path.dirname(os.path.realpath(__file__))
@@ -193,7 +189,7 @@ def get_image_cropped_grayscale(name, left, top, width, height):
     levels = openslide.level_dimensions[0]
     imageW = levels[0]
     imageH = levels[1]
-    new_width = int((imageW / tile_size) * 128)
+    new_width = int((imageW / tile_size) * resize_value)
     ratio = new_width / imageW
     left = int(left / ratio)
     if not (0 <= left <= imageW):
