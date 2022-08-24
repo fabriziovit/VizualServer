@@ -18,7 +18,7 @@ from openslide.deepzoom import DeepZoomGenerator
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
 # limiter = Limiter(app, key_func=get_remote_address, default_limits=["20/minute"])
-app.wsgi_app = AuthorizationMiddleware(app.wsgi_app)
+#app.wsgi_app = AuthorizationMiddleware(app.wsgi_app)
 
 
 @app.route('/api/get-images', methods=['GET'])
@@ -27,29 +27,18 @@ def get_images_names():
 
 
 class Converter:
-    def get_zoom(self, slide_filename, tile_size=2048):
+    # get the image using the level dimension
+    def get_zoom(self, slide_filename, tile_size=8192):
+        max_width = 5120
+        max_height = 3008
         slide_file = OpenSlide(slide_filename)
-        resize_value = 256
-        resize_tile_div_value = tile_size/resize_value
-        col_ini = 0
-        row_ini = 0
-        dz = DeepZoomGenerator(slide_file, tile_size, 1, False)
-        col_fin = math.ceil(slide_file.dimensions[0]/tile_size)
-        row_fin = math.ceil(slide_file.dimensions[1]/tile_size)
-
-        new_im = Image.new('RGB', (int((slide_file.dimensions[0]/tile_size) * resize_value), int((slide_file.dimensions[1]/tile_size) * resize_value)))
-        y_offset = 0
-        x_offset = 0
-        for i in range(col_ini, col_fin):
-            for j in range(row_ini, row_fin):
-                tile = dz.get_tile(dz.level_count-1, (i, j))
-                tile = tile.resize((int(tile.size[0]/resize_tile_div_value), int(tile.size[1]/resize_tile_div_value)), Image.ANTIALIAS)
-                new_im.paste(tile, (x_offset, y_offset))
-                y_offset += resize_value
-            y_offset = 0
-            x_offset += resize_value
-        return new_im
-
+        coeff = max(slide_file.dimensions[1]/max_height, slide_file.dimensions[0]/max_width)
+        width_result = slide_file.dimensions[0]/coeff
+        height_result = slide_file.dimensions[1]/coeff
+        print("Converting image...")
+        image = slide_file.get_thumbnail((width_result, height_result))
+        print(image.size)
+        return image
 
 @app.route('/api/get-image', methods=['POST'])
 def get_image():
@@ -90,75 +79,69 @@ def get_ratio(file_name):
     ratio = min(selected_size[0] / original_size[0], selected_size[1] / original_size[1])
     return ratio
 
-'''
-# get the 2 coords and the width and the height of the image cropped also the name of the image, the function calculate the ratio of the area cropped and return the image
-@app.route('/api/get-image-cropped/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
-def get_image_cropped(name, left, top, width, height):
-    max_value = 8000
-    values = images.get(name)
-    [name, ratio] = values
-    real_path = os.path.dirname(os.path.realpath(__file__))
-    image_abs_path = os.path.join(real_path + "/images", name)
-    openslide = OpenSlide(image_abs_path + ".svs")
-    levels = openslide.level_dimensions[0]
-    imageW = levels[0]
-    imageH = levels[1]
-    left = int(left / ratio)
-    if not (0 <= left <= imageW):
-        left = imageW
-    top = int(top / ratio)
-    if not (0 <= top <= imageH):
-        top = imageW
-    width = int(width / ratio)
-    if not ((left + width) < imageW):
-        logger.error("Error cropping images, data not valid")
-        return Response(status=500)
-    height = int(height / ratio)
-    if not ((top + height) < imageH):
-        logger.error("Error cropping images, data not valid")
-        return Response(status=500)
-    image = openslide.read_region((left, top), 0, (width, height))
-    image = image.convert('RGB')
-    img_io = image_abs_path + "_cropped.jpeg"
-    ratio_crop = min(max_value / image.width, max_value / image.height)
-    if ratio_crop < 1:
-        image = image.resize((math.floor(image.width * ratio_crop), math.floor(image.height * ratio_crop)),
-                             Image.ANTIALIAS)
-    image.save(img_io, 'JPEG')
-    return send_file(img_io, mimetype='image/jpeg')
-'''
-
 
 @app.route('/api/get-image-cropped/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
 def get_image_cropped_test(name, width, height, left, top):
-    max_value = 8000
-    tile_size = 2048
-    resize_value = 256
+    max_width = 5120
+    max_height = 3008
+    tile_size = 4096
+    resize_value = 512
     values = images.get(name)
-    [name, ratio] = values
+    [name, _] = values
     real_path = os.path.dirname(os.path.realpath(__file__))
     image_abs_path = os.path.join(real_path + "/images", name)
     openslide = OpenSlide(image_abs_path + ".svs")
     levels = openslide.dimensions
     image_width = levels[0]
     image_height = levels[1]
-    print(image_height, image_width)
-
-    new_width = int((image_width/tile_size) * resize_value)
-    ratio = new_width/image_width
-    left = int(left/ratio)
-    top = int(top/ratio)
-    height = int(height/ratio)
-    width = int(width/ratio)
+    '''
+    ratio = max(image_height/max_height, image_width/max_width)
+    print(image_height, image_width, ratio)
+    left = int(left * ratio)
+    if not (0 <= left <= image_width):
+        left = image_width
+    top = int(top * ratio)
+    if not (0 <= top <= image_height):
+        top = image_width
+    width = int(width * ratio)
+    if not ((left + width) < image_width):
+        logger.error("Error cropping images, data not valid")
+        return Response(status=500)
+    height = int(height * ratio)
+    if not ((top + height) < image_height):
+        logger.error("Error cropping images, data not valid")
+        return Response(status=500)
+    '''
     image = openslide.read_region((left, top), 0, (width, height))
     image = image.convert('RGB')
     img_io = image_abs_path + "_cropped.jpeg"
-    ratio_crop = min(max_value / image.width, max_value / image.height)
-    if ratio_crop < 1:
-        image = image.resize((math.floor(image.width * ratio_crop), math.floor(image.height * ratio_crop)),
+    ratio_crop = max(image.width/max_width, image.height / max_height)
+    if ratio_crop > 1:
+        image = image.resize((math.floor(image.width / ratio_crop), math.floor(image.height / ratio_crop)),
                              Image.ANTIALIAS)
     image.save(img_io, 'JPEG')
     return send_file(img_io, mimetype='image/jpeg')
+
+
+@app.route('/api/get-image-width/<name>')
+def get_image_width(name):
+    values = images.get(name)
+    [name, _] = values
+    real_path = os.path.dirname(os.path.realpath(__file__))
+    image_abs_path = os.path.join(real_path + "/images", name)
+    openslide = OpenSlide(image_abs_path + ".svs")
+    return jsonify(data=[openslide.dimensions[0]])
+
+
+@app.route('/api/get-image-height/<name>')
+def get_image_height(name):
+    values = images.get(name)
+    [name, _] = values
+    real_path = os.path.dirname(os.path.realpath(__file__))
+    image_abs_path = os.path.join(real_path + "/images", name)
+    openslide = OpenSlide(image_abs_path + ".svs")
+    return jsonify(data=[openslide.dimensions[1]])
+
 
 @app.route('/api/get-image-grayscale/<name>')
 def get_image_grayscale(name):
@@ -176,11 +159,12 @@ def get_image_grayscale(name):
     return send_file(img_io, mimetype='image/jpeg')
 
 
+#da modificare se funziona il metodo sopra
 @app.route('/api/get-image-cropped-grayscale/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
 def get_image_cropped_grayscale(name, left, top, width, height):
     max_value = 8000
-    tile_size = 2048
-    resize_value = 256
+    tile_size = 4096
+    resize_value = 512
     values = images.get(name)
     [name, ratio] = values
     real_path = os.path.dirname(os.path.realpath(__file__))
@@ -221,6 +205,8 @@ def exit_handler(code, frame):
     real_path = os.path.dirname(os.path.realpath(__file__))
     for fil in os.listdir(real_path + "/images"):
         if fil.endswith('.jpeg') or fil.endswith('.jpg'):
+            if fil == "test1.jpeg":
+                break
             os.remove(real_path + "/images/" + fil)
     print("SPEGNIMENTO SERVER... CANCELLAZIONE FILES CONVERTITI.")
 
