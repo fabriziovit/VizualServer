@@ -17,8 +17,10 @@ from openslide.deepzoom import DeepZoomGenerator
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
+
+
 # limiter = Limiter(app, key_func=get_remote_address, default_limits=["20/minute"])
-#app.wsgi_app = AuthorizationMiddleware(app.wsgi_app)
+# app.wsgi_app = AuthorizationMiddleware(app.wsgi_app)
 
 
 @app.route('/api/get-images', methods=['GET'])
@@ -32,13 +34,14 @@ class Converter:
         max_width = 5120
         max_height = 3008
         slide_file = OpenSlide(slide_filename)
-        coeff = max(slide_file.dimensions[1]/max_height, slide_file.dimensions[0]/max_width)
-        width_result = slide_file.dimensions[0]/coeff
-        height_result = slide_file.dimensions[1]/coeff
+        coeff = max(slide_file.dimensions[1] / max_height, slide_file.dimensions[0] / max_width)
+        width_result = slide_file.dimensions[0] / coeff
+        height_result = slide_file.dimensions[1] / coeff
         print("Converting image...")
         image = slide_file.get_thumbnail((width_result, height_result))
         print(image.size)
         return image
+
 
 @app.route('/api/get-image', methods=['POST'])
 def get_image():
@@ -56,7 +59,7 @@ def get_image():
             converter = Converter()
             image = converter.get_zoom(image_abs_path + ".svs")
             img_io = image_abs_path + ".jpeg"
-            image.save(img_io, 'JPEG')
+            image.save(img_io, 'JPEG', quality=100)
             print("Converted.")
             return send_file(img_io, mimetype='image/jpeg')
     except:
@@ -115,11 +118,11 @@ def get_image_cropped_test(name, width, height, left, top):
     image = openslide.read_region((left, top), 0, (width, height))
     image = image.convert('RGB')
     img_io = image_abs_path + "_cropped.jpeg"
-    ratio_crop = max(image.width/max_width, image.height / max_height)
+    ratio_crop = max(image.width / max_width, image.height / max_height)
     if ratio_crop > 1:
         image = image.resize((math.floor(image.width / ratio_crop), math.floor(image.height / ratio_crop)),
                              Image.ANTIALIAS)
-    image.save(img_io, 'JPEG')
+    image.save(img_io, 'JPEG', quality=100)
     return send_file(img_io, mimetype='image/jpeg')
 
 
@@ -159,7 +162,7 @@ def get_image_grayscale(name):
     return send_file(img_io, mimetype='image/jpeg')
 
 
-#da modificare se funziona il metodo sopra
+# da modificare se funziona il metodo sopra
 @app.route('/api/get-image-cropped-grayscale/<name>/<int:left>_<int:top>_<int:width>x<int:height>')
 def get_image_cropped_grayscale(name, left, top, width, height):
     max_value = 8000
