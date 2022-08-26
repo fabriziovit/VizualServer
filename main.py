@@ -36,7 +36,6 @@ class Converter:
         coeff = max(slide_file.dimensions[1] / max_height, slide_file.dimensions[0] / max_width)
         width_result = slide_file.dimensions[0] / coeff
         height_result = slide_file.dimensions[1] / coeff
-        print("Converting image...")
         image = slide_file.get_thumbnail((width_result, height_result))
         print(image.size)
         return image
